@@ -1,4 +1,7 @@
+// Hooks
 export * from './hooks';
+
+// Components
 export { default as AddWorkspaceForm } from './components/AddWorkspaceForm';
 export { default as AuthorKeypairForm } from './components/AuthorKeypairForm';
 export { default as AuthorKeypairUpload } from './components/AuthorKeypairUpload';
@@ -12,3 +15,6 @@ export { default as RemoveWorkspaceButton } from './components/RemoveWorkspaceBu
 export { default as SignOutButton } from './components/SignOutButton';
 export { default as WorkspaceLabel } from './components/WorkspaceLabel';
 export { default as WorkspaceList } from './components/WorkspaceList';
+
+// Earthbar
+export { default as NewUserPanel } from './components/earthbar/NewUserPanel';

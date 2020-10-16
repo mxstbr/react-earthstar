@@ -13,6 +13,7 @@ import {
   WriteResult,
   ValidationError,
   WriteEvent,
+  OnePubOneWorkspaceSyncer,
 } from 'earthstar';
 
 const StorageContext = React.createContext<{
@@ -30,15 +31,25 @@ const CurrentAuthorContext = React.createContext<{
   setCurrentAuthor: React.Dispatch<React.SetStateAction<AuthorKeypair | null>>;
 }>({ currentAuthor: null, setCurrentAuthor: () => {} });
 
+const IsLiveContext = React.createContext<{
+  isLive: boolean;
+  setIsLive: React.Dispatch<React.SetStateAction<boolean>>;
+}>({
+  isLive: false,
+  setIsLive: () => {},
+});
+
 export function EarthstarPeer({
   initWorkspaces = [],
   initPubs = {},
   initCurrentAuthor = null,
+  initIsLive = false,
   children,
 }: {
   initWorkspaces?: IStorage[];
   initPubs?: Record<string, string[]>;
   initCurrentAuthor?: AuthorKeypair | null;
+  initIsLive?: boolean;
   children: React.ReactNode;
 }) {
   const [storages, setStorages] = React.useState(
@@ -51,17 +62,61 @@ export function EarthstarPeer({
 
   const [currentAuthor, setCurrentAuthor] = React.useState(initCurrentAuthor);
 
+  const [isLive, setIsLive] = React.useState(initIsLive);
+
   return (
     <StorageContext.Provider value={{ storages, setStorages }}>
       <PubsContext.Provider value={{ pubs, setPubs }}>
         <CurrentAuthorContext.Provider
           value={{ currentAuthor, setCurrentAuthor }}
         >
-          {children}
+          <IsLiveContext.Provider value={{ isLive, setIsLive }}>
+            {children}
+            {Object.keys(storages).map(workspaceAddress => (
+              <LiveSyncer
+                key={workspaceAddress}
+                workspaceAddress={workspaceAddress}
+              />
+            ))}
+          </IsLiveContext.Provider>
         </CurrentAuthorContext.Provider>
       </PubsContext.Provider>
     </StorageContext.Provider>
   );
+}
+
+function LiveSyncer({ workspaceAddress }: { workspaceAddress: string }) {
+  const [isLive] = useIsLive();
+  const [storages] = useStorages();
+  const [pubs] = useWorkspacePubs(workspaceAddress);
+
+  React.useEffect(() => {
+    const syncers = pubs.map(
+      pubUrl => new OnePubOneWorkspaceSyncer(storages[workspaceAddress], pubUrl)
+    );
+
+    if (!isLive) {
+      syncers.forEach(syncer => {
+        syncer.stopPushStream();
+        syncer.stopPullStream();
+      });
+    } else {
+      // Start streaming when isLive changes to true
+      syncers.forEach(syncer => {
+        syncer.syncOnceAndContinueLive();
+      });
+    }
+
+    // On cleanup (unmount, value of syncers changes) stop all syncers from pulling and pushing
+    return () => {
+      syncers.forEach(syncer => {
+        syncer.stopPullStream();
+        syncer.stopPushStream();
+      });
+    };
+  }, [pubs, isLive, workspaceAddress, storages]);
+
+  return null;
 }
 
 export function useWorkspaces() {
@@ -349,4 +404,13 @@ export function useSubscribeToStorages(options: {
       unsubscribes.forEach(unsubscribe => unsubscribe());
     };
   }, [options, storages]);
+}
+
+export function useIsLive(): [
+  boolean,
+  React.Dispatch<React.SetStateAction<boolean>>
+] {
+  const { isLive, setIsLive } = React.useContext(IsLiveContext);
+
+  return [isLive, setIsLive];
 }
